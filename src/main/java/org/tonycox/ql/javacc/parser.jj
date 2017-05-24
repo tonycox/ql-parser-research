@@ -1,0 +1,68 @@
+options {
+STATIC = false ;
+JDK_VERSION = "1.8";
+}
+PARSER_BEGIN(ELParser)
+package org.tonycox.ql.javacc;
+
+import java.io.StringReader;
+
+public class ELParser {
+
+    /**
+    * A String based constructor for ease of use.
+    **/
+    public ELParser(String s) {
+        this(new StringReader(s));
+    }
+}
+PARSER_END(ELParser)
+
+SKIP :
+{
+    " "
+    | "\t"
+    | "\r"
+}
+
+TOKEN: /*RESERVED TOKENS FOR UQL */
+{     <AND: "and">
+   |  <OR:  "or">
+   |  <LIKE: "like">
+   |  <NOTLIKE: "!like">
+   |  <LESSER: "lt">
+   |  <LESSER_OR_EQUALS: "lte">
+   |  <GREATER: "gt">
+   |  <GREATER_OR_EQUALS: "gte">
+   |  <IN: "in">
+   |  <NOT_IN: "!in">
+   |  <LPAREN: "(">
+   |  <RPAREN: ")">
+   |  <EQUALS: "eq">
+   |  <NOTEQUAL: "!eq">
+}
+
+TOKEN :
+{
+<STRING : (["A"-"Z", "a"-"z", "0"-"9"])+ >
+}
+
+void expression() :
+{}
+{   queryTerm()
+    (
+    ( <AND> | <OR> )
+    queryTerm() )*
+}
+void queryTerm() :
+{}
+{
+    ( <LIKE> | <NOTLIKE> )
+    ( <LESSER> | <LESSER_OR_EQUALS> )
+    ( <GREATER> | <GREATER_OR_EQUALS> )
+    ( <IN> | <NOT_IN> )
+    ( <EQUALS> | <NOTEQUAL>)
+    ( <STRING> )
+    |
+    <LPAREN> expression() <RPAREN>
+}
