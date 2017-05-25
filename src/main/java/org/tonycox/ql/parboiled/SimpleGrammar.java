@@ -7,8 +7,10 @@ import org.parboiled.annotations.BuildParseTree;
 import org.parboiled.annotations.DontLabel;
 import org.parboiled.annotations.MemoMismatches;
 import org.parboiled.annotations.SuppressNode;
+import org.parboiled.errors.InvalidInputError;
 import org.parboiled.errors.ParseError;
 import org.parboiled.parserunners.ReportingParseRunner;
+import org.parboiled.support.MatcherPath;
 import org.parboiled.support.ParsingResult;
 
 import java.util.stream.Collectors;
@@ -18,21 +20,28 @@ import java.util.stream.Collectors;
  * @since 24.05.17.
  */
 @BuildParseTree
-public class SimpleGrammar extends BaseParser<Object> {
+public class SimpleGrammar extends BaseParser<String> {
 
-    private ReportingParseRunner<Object> runner;
+    private ReportingParseRunner<String> runner;
 
     public SimpleGrammar() {
         runner = new ReportingParseRunner<>(this.RootQuery());
     }
 
-    public Node<Object> parseQuery(String query) {
-        ParsingResult<Object> parsingResult = runner.run(query);
+    /**
+     * The main parsing method. Uses a ReportingParseRunner (which only reports the first error) for simplicity.
+     */
+    public Node<String> parseQuery(String query) {
+        ParsingResult<String> parsingResult = runner.run(query);
         if (parsingResult.hasErrors()) {
-            String errorMessages = parsingResult.parseErrors.stream()
-                    .map(ParseError::getErrorMessage)
-                    .collect(Collectors.joining(", "));
-            throw new RuntimeException(errorMessages);
+            ParseError error = parsingResult.parseErrors.get(0);
+            String errorMessage = error.getErrorMessage();
+            if (error instanceof InvalidInputError) {
+                errorMessage = ((InvalidInputError) error).getFailedMatchers().stream()
+                        .map(MatcherPath::toString)
+                        .collect(Collectors.joining(", \n"));
+            }
+            throw new GrammarException(errorMessage);
         } else {
             return parsingResult.parseTreeRoot;
         }
@@ -45,16 +54,16 @@ public class SimpleGrammar extends BaseParser<Object> {
     private static final String AVAILABLE_SIGNS = "'\"?!*%-_";
     private static final String AVAILABLE_SPACES = " \t\r\f";
 
-    private final Rule NOT = Operator("not");
-    private final Rule AND = Operator("and");
-    private final Rule OR = Operator("or");
-    private final Rule EQ = Operator("eq");
-    private final Rule GE = Operator("ge");
-    private final Rule GT = Operator("gt");
-    private final Rule LT = Operator("lt");
-    private final Rule LE = Operator("le");
-    private final Rule LIKE = Operator("like");
-    private final Rule IN = Operator("in");
+    final Rule AND = ConOperator("and");
+    final Rule OR = ConOperator("or");
+    final Rule EQ = Operator("eq");
+    final Rule NOT_EQ = Operator("ne");
+    final Rule GE = Operator("ge");
+    final Rule GT = Operator("gt");
+    final Rule LT = Operator("lt");
+    final Rule LE = Operator("le");
+    final Rule LIKE = Operator("like");
+    final Rule IN = Operator("in");
 
     @SuppressNode
     @DontLabel
@@ -62,16 +71,35 @@ public class SimpleGrammar extends BaseParser<Object> {
         return Sequence(IgnoreCase(string), Space()).label('\'' + string + '\'');
     }
 
+    @SuppressNode
+    @DontLabel
+    Rule ConOperator(String string) {
+        return Sequence(IgnoreCase(string), Optional(Space(), TestNot(')'))).label('\'' + string + '\'');
+    }
+
     @MemoMismatches
     Rule Operator() {
         return Sequence(
-                Optional(NOT).label("optional not"),
-                FirstOf(OR, AND, EQ, GE, GT, LT, LE, LIKE, IN).label("operator"));
+                FirstOf(OR, AND, EQ, GE, GT, LT, LE, LIKE, IN, NOT_EQ).label("operator"),
+                push(convertOperator(match())));
+    }
+
+    String convertOperator(String operator) {
+        String space = " ";
+        switch (operator.trim()) {
+            case "like":
+                return "matches" + space;
+            default:
+                return operator;
+        }
     }
 
     @MemoMismatches
     Rule Conjunction() {
-        return Sequence(Space(), Optional(NOT), FirstOf(OR, AND));
+        return Sequence(
+                Optional(TestNot('('), Space()),
+                FirstOf(OR, AND),
+                push(" " + match() + pop()));
     }
 
     Rule RootQuery() {
@@ -85,34 +113,46 @@ public class SimpleGrammar extends BaseParser<Object> {
         return Sequence(
                 '(',
                 FirstOf(Expression(),
-                        Sequence(Parenthesis(), ConjunctedComplexQuery())),
+                        Sequence(Parenthesis(), ConjunctedComplexQuery(), push(pop() + pop()))),
                 ')',
+                push(String.format("(%s)", pop())),
                 ConjunctedComplexQuery());
     }
 
     Rule ConjunctedComplexQuery() {
-        return ZeroOrMore(Conjunction(), ComplexQuery());
+        return ZeroOrMore(
+                Conjunction(),
+                ComplexQuery());
     }
 
     Rule Parenthesis() {
-        return Sequence('(', Expression(), ')');
+        return Sequence(
+                '(',
+                Expression(),
+                ')',
+                push(String.format("(%s)", pop())));
     }
 
     Rule Expression() {
         return Sequence(
                 Selector(),
                 Operator(),
-                Value());
+                Value(),
+                push(String.format("%3$s%2$s%1$s", pop(), pop(), pop())));
     }
 
     Rule Selector() {
         return Sequence(
                 Str().label("string"),
-                Optional(Space()).label("space"));
+                push(match()),
+                Optional(Space(), push(pop() + match())).label("space"));
     }
 
     Rule Value() {
-        return OneOrMore(FirstOf(SpecialSigns(), Str(), Number()));
+        return Sequence(
+                OneOrMore(FirstOf(SpecialSigns(), Str(), Number())),
+                push(match()),
+                Optional(Space(), push(pop() + match())));
     }
 
     Rule Str() {
