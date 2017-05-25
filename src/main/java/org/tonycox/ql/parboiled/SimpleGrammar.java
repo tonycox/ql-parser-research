@@ -5,6 +5,7 @@ import org.parboiled.Node;
 import org.parboiled.Rule;
 import org.parboiled.annotations.BuildParseTree;
 import org.parboiled.annotations.DontLabel;
+import org.parboiled.annotations.MemoMismatches;
 import org.parboiled.annotations.SuppressNode;
 import org.parboiled.errors.ParseError;
 import org.parboiled.parserunners.ReportingParseRunner;
@@ -37,6 +38,13 @@ public class SimpleGrammar extends BaseParser<Object> {
         }
     }
 
+    //-------------------------------------------------------------------------
+    //  Parser itself
+    //-------------------------------------------------------------------------
+
+    private static final String AVAILABLE_SIGNS = "'\"?!*%-_";
+    private static final String AVAILABLE_SPACES = " \t\r\f";
+
     private final Rule NOT = Operator("not");
     private final Rule AND = Operator("and");
     private final Rule OR = Operator("or");
@@ -54,12 +62,14 @@ public class SimpleGrammar extends BaseParser<Object> {
         return Sequence(IgnoreCase(string), Space()).label('\'' + string + '\'');
     }
 
+    @MemoMismatches
     Rule Operator() {
         return Sequence(
                 Optional(NOT).label("optional not"),
                 FirstOf(OR, AND, EQ, GE, GT, LT, LE, LIKE, IN).label("operator"));
     }
 
+    @MemoMismatches
     Rule Conjunction() {
         return Sequence(Space(), Optional(NOT), FirstOf(OR, AND));
     }
@@ -75,9 +85,13 @@ public class SimpleGrammar extends BaseParser<Object> {
         return Sequence(
                 '(',
                 FirstOf(Expression(),
-                        Sequence(Parenthesis(), Conjunction(), Parenthesis(), Optional(Conjunction(), Parenthesis()))),
+                        Sequence(Parenthesis(), ConjunctedComplexQuery())),
                 ')',
-                ZeroOrMore(Conjunction(), ComplexQuery()));
+                ConjunctedComplexQuery());
+    }
+
+    Rule ConjunctedComplexQuery() {
+        return ZeroOrMore(Conjunction(), ComplexQuery());
     }
 
     Rule Parenthesis() {
@@ -102,26 +116,26 @@ public class SimpleGrammar extends BaseParser<Object> {
     }
 
     Rule Str() {
-        return Sequence(Word(), Optional(Number()), Optional(Str()));
+        return Sequence(Letters(), Optional(Number()), Optional(Str()));
     }
 
     Rule Number() {
         return OneOrMore(CharRange('0', '9'));
     }
 
-    Rule Word() {
+    Rule Letters() {
         return OneOrMore(
                 FirstOf(CharRange('a', 'z'), CharRange('A', 'Z')),
-                Optional(Word()));
+                Optional(Letters()));
     }
 
     Rule SpecialSigns() {
-        return OneOrMore(AnyOf("'\"?!*%-_"));
+        return OneOrMore(AnyOf(AVAILABLE_SIGNS));
     }
 
     @SuppressNode
     @DontLabel
     Rule Space() {
-        return OneOrMore(AnyOf(" \t\r\f").label("Whitespace"));
+        return OneOrMore(AnyOf(AVAILABLE_SPACES).label("Whitespace"));
     }
 }
