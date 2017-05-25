@@ -1,9 +1,6 @@
 package org.tonycox.ql.spel;
 
 
-import org.springframework.expression.Expression;
-import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.tonycox.ql.User;
 
 import java.util.List;
@@ -18,10 +15,9 @@ public class SpEL {
 
     public static void main(String[] args) {
 
-        ExpressionParser parser = new SpelExpressionParser();
-        Expression exp = parser.parseExpression("(True and False) or (phone eq 'stupid') and (name matches '(.*ff.*)')");
+        String query = "(True and False) or (phone eq 'stupid') and (name matches '(.*ff.*)')";
 
-        SpELPredicate<User> predicate = new SpELPredicate<>(exp);
+        SpELPredicate<User> predicate = new SpELPredicate<>(query);
 
         List<User> collect = Stream
                 .of(new User().setName("Ned fflanders").setPhone("stupid"),

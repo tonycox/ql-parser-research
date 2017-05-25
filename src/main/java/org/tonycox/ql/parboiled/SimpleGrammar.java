@@ -7,6 +7,7 @@ import org.parboiled.annotations.BuildParseTree;
 import org.parboiled.annotations.DontLabel;
 import org.parboiled.annotations.MemoMismatches;
 import org.parboiled.annotations.SuppressNode;
+import org.parboiled.annotations.SuppressSubnodes;
 import org.parboiled.errors.InvalidInputError;
 import org.parboiled.errors.ParseError;
 import org.parboiled.parserunners.ReportingParseRunner;
@@ -25,7 +26,7 @@ public class SimpleGrammar extends BaseParser<String> {
     private ReportingParseRunner<String> runner;
 
     public SimpleGrammar() {
-        runner = new ReportingParseRunner<>(this.RootQuery());
+        runner = new ReportingParseRunner<>(this.rootQuery());
     }
 
     /**
@@ -51,131 +52,151 @@ public class SimpleGrammar extends BaseParser<String> {
     //  Parser itself
     //-------------------------------------------------------------------------
 
-    private static final String AVAILABLE_SIGNS = "'\"?!*%-_";
+    private static final String AVAILABLE_SIGNS = "?!*-_";
+    private static final String AVAILABLE_IDENTIFIER_SIGNS = "._";
     private static final String AVAILABLE_SPACES = " \t\r\f";
 
-    final Rule AND = ConOperator("and");
-    final Rule OR = ConOperator("or");
-    final Rule EQ = Operator("eq");
-    final Rule NOT_EQ = Operator("ne");
-    final Rule GE = Operator("ge");
-    final Rule GT = Operator("gt");
-    final Rule LT = Operator("lt");
-    final Rule LE = Operator("le");
-    final Rule LIKE = Operator("like");
-    final Rule IN = Operator("in");
+    final Rule AND = conOperator("and");
+    final Rule OR = conOperator("or");
+    final Rule EQ = operator("eq");
+    final Rule NOT_EQ = operator("ne");
+    final Rule GE = operator("ge");
+    final Rule GT = operator("gt");
+    final Rule LT = operator("lt");
+    final Rule LE = operator("le");
+    final Rule LIKE = operator("like");
+    final Rule IN = operator("in");
 
     @SuppressNode
     @DontLabel
-    Rule Operator(String string) {
-        return Sequence(IgnoreCase(string), Space()).label('\'' + string + '\'');
+    Rule operator(String string) {
+        return Sequence(IgnoreCase(string), space()).label('\'' + string + '\'');
     }
 
     @SuppressNode
     @DontLabel
-    Rule ConOperator(String string) {
-        return Sequence(IgnoreCase(string), Optional(Space(), TestNot(')'))).label('\'' + string + '\'');
+    Rule conOperator(String string) {
+        return Sequence(IgnoreCase(string), Optional(space(), TestNot(')'))).label('\'' + string + '\'');
     }
 
     @MemoMismatches
-    Rule Operator() {
+    Rule operator() {
         return Sequence(
                 FirstOf(OR, AND, EQ, GE, GT, LT, LE, LIKE, IN, NOT_EQ).label("operator"),
-                push(convertOperator(match())));
+                push(convertOperator(match()) + " "));
     }
 
-    String convertOperator(String operator) {
-        String space = " ";
-        switch (operator.trim()) {
+    static String convertOperator(String operator) {
+        String op = operator.trim();
+        switch (op) {
             case "like":
-                return "matches" + space;
+                return "matches";
             default:
-                return operator;
+                return op;
         }
     }
 
-    @MemoMismatches
-    Rule Conjunction() {
+    Rule rootQuery() {
         return Sequence(
-                Optional(TestNot('('), Space()),
+                FirstOf(expression(), complexQuery(), sequenceOfComplexQuery()).label("query"),
+                Optional(space()).label("space"),
+                EOI);
+    }
+
+    Rule complexQuery() {
+        return Sequence(
+                Optional(space()),
+                '(',
+                FirstOf(expression(), sequenceOfComplexQuery()),
+                ')',
+                push(String.format("(%s)", pop())),
+                conjunctedComplexQuery());
+    }
+
+    Rule sequenceOfComplexQuery() {
+        return Sequence(parenthesis(), conjunctedComplexQuery());
+    }
+
+    Rule conjunctedComplexQuery() {
+        return ZeroOrMore(
+                conjunction(),
+                complexQuery(),
+                push(pop() + pop()));
+    }
+
+    @MemoMismatches
+    Rule conjunction() {
+        return Sequence(
+                Optional(TestNot('('), space()),
                 FirstOf(OR, AND),
                 push(" " + match() + pop()));
     }
 
-    Rule RootQuery() {
+    Rule parenthesis() {
         return Sequence(
-                FirstOf(Expression(), ComplexQuery()).label("query"),
-                Optional(Space()).label("space"),
-                EOI);
-    }
-
-    Rule ComplexQuery() {
-        return Sequence(
+                Optional(space()),
                 '(',
-                FirstOf(Expression(),
-                        Sequence(Parenthesis(), ConjunctedComplexQuery(), push(pop() + pop()))),
+                expression(),
                 ')',
-                push(String.format("(%s)", pop())),
-                ConjunctedComplexQuery());
-    }
-
-    Rule ConjunctedComplexQuery() {
-        return ZeroOrMore(
-                Conjunction(),
-                ComplexQuery());
-    }
-
-    Rule Parenthesis() {
-        return Sequence(
-                '(',
-                Expression(),
-                ')',
+                Optional(space()),
                 push(String.format("(%s)", pop())));
     }
 
-    Rule Expression() {
+    Rule expression() {
         return Sequence(
-                Selector(),
-                Operator(),
-                Value(),
+                selector(),
+                operator(),
+                value(),
                 push(String.format("%3$s%2$s%1$s", pop(), pop(), pop())));
     }
 
-    Rule Selector() {
+    Rule selector() {
         return Sequence(
-                Str().label("string"),
+                identifier().label("identifier"),
                 push(match()),
-                Optional(Space(), push(pop() + match())).label("space"));
+                Optional(space(), push(pop() + match())).label("space"));
     }
 
-    Rule Value() {
+    Rule value() {
         return Sequence(
-                OneOrMore(FirstOf(SpecialSigns(), Str(), Number())),
+                FirstOf(string(), quotedString()),
                 push(match()),
-                Optional(Space(), push(pop() + match())));
+                Optional(space(), push(pop() + match())));
     }
 
-    Rule Str() {
-        return Sequence(Letters(), Optional(Number()), Optional(Str()));
+    Rule quotedString() {
+        return Sequence('\'', ZeroOrMore(FirstOf(string(), space())), '\'');
     }
 
-    Rule Number() {
+    @SuppressSubnodes
+    Rule string() {
+        return OneOrMore(FirstOf(specialSigns(), letters(), number()));
+    }
+
+    Rule identifier() {
+        return Sequence(letters(), Optional(number()), Optional(identifier()));
+    }
+
+    @SuppressSubnodes
+    Rule number() {
         return OneOrMore(CharRange('0', '9'));
     }
 
-    Rule Letters() {
+    @SuppressSubnodes
+    Rule letters() {
         return OneOrMore(
-                FirstOf(CharRange('a', 'z'), CharRange('A', 'Z')),
-                Optional(Letters()));
+                FirstOf(CharRange('a', 'z'), CharRange('A', 'Z'), AnyOf(AVAILABLE_IDENTIFIER_SIGNS)),
+                Optional(letters()));
     }
 
-    Rule SpecialSigns() {
+    @SuppressSubnodes
+    Rule specialSigns() {
         return OneOrMore(AnyOf(AVAILABLE_SIGNS));
     }
 
     @SuppressNode
     @DontLabel
-    Rule Space() {
+    Rule space() {
         return OneOrMore(AnyOf(AVAILABLE_SPACES).label("Whitespace"));
     }
 }
