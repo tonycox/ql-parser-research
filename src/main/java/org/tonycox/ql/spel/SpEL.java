@@ -19,8 +19,7 @@ public class SpEL {
     public static void main(String[] args) {
 
         ExpressionParser parser = new SpelExpressionParser();
-        Expression exp = parser.parseExpression("(True and False) or (phone.equals('stupid')) " +
-                "and (name matches '(.*ff.*)') and ");
+        Expression exp = parser.parseExpression("(True and False) or (phone eq 'stupid') and (name matches '(.*ff.*)')");
 
         SpELPredicate<User> predicate = new SpELPredicate<>(exp);
 
