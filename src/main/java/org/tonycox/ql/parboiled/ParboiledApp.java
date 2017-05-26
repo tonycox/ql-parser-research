@@ -2,9 +2,7 @@ package org.tonycox.ql.parboiled;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
-import org.springframework.core.convert.support.DefaultConversionService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,11 +24,11 @@ import java.util.stream.Stream;
 public class ParboiledApp {
 
     @GetMapping(value = "/users")
-    public List<User> getUsersByQuery(@RequestParam("query") Predicate<User> predicate) {
+    public List<User> getUsersByQuery(@RequestParam(value = "query", required = false) Predicate<User> predicate) {
         return Stream
                 .of(new User().setName("Ned Flanders").setPhone("stupid"),
                         new User().setName("Homer Simpson").setPhone("not stupid"))
-                .filter(predicate)
+                .filter(predicate == null ? (n) -> true : predicate)
                 .collect(Collectors.toList());
     }
 
@@ -40,6 +38,9 @@ public class ParboiledApp {
         RestTemplate rest = new RestTemplate();
         List answer = rest
                 .getForObject("http://localhost:8080/users?query=" + query, List.class);
+        System.out.println(answer);
+        answer = rest
+                .getForObject("http://localhost:8080/users", List.class);
         System.out.println(answer);
     }
 }

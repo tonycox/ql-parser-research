@@ -34,9 +34,6 @@ public class QueryToPredicateConverterFactory<E> implements ConverterFactory<Str
 
         @Override
         public Predicate<E> convert(String source) {
-            if (source == null) {
-                return (e) -> true;
-            }
             String query = grammar.parseQuery(source).getValue();
             SpelExpression expression = spelParser.parseRaw(query);
             return new SpELPredicate<>(expression);
