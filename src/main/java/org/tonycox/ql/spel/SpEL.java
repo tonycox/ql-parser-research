@@ -15,7 +15,7 @@ public class SpEL {
 
     public static void main(String[] args) {
 
-        String query = "(True and False) or (phone eq 'stupid') and (name matches '(.*ff.*)')";
+        String query = "(True and False) or (phone eq 'stupid')\tand\t(name\rmatches '(.*ff.*)')";
 
         SpELPredicate<User> predicate = new SpELPredicate<>(query);
 

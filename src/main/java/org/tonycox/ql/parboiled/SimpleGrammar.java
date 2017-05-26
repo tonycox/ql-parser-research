@@ -54,7 +54,7 @@ public class SimpleGrammar extends BaseParser<String> {
 
     private static final String AVAILABLE_SIGNS = "?!*-_";
     private static final String AVAILABLE_IDENTIFIER_SIGNS = "._";
-    private static final String AVAILABLE_SPACES = " \t\r\f";
+    private static final String AVAILABLE_SPACES = " \t\r";
 
     final Rule AND = conOperator("and");
     final Rule OR = conOperator("or");
@@ -65,6 +65,7 @@ public class SimpleGrammar extends BaseParser<String> {
     final Rule LT = operator("lt");
     final Rule LE = operator("le");
     final Rule LIKE = operator("like");
+    final Rule NOT_LIKE = operator("not_like");
     final Rule IN = operator("in");
 
     @SuppressNode
@@ -82,18 +83,8 @@ public class SimpleGrammar extends BaseParser<String> {
     @MemoMismatches
     Rule operator() {
         return Sequence(
-                FirstOf(OR, AND, EQ, GE, GT, LT, LE, LIKE, IN, NOT_EQ).label("operator"),
-                push(convertOperator(match()) + " "));
-    }
-
-    static String convertOperator(String operator) {
-        String op = operator.trim();
-        switch (op) {
-            case "like":
-                return "matches";
-            default:
-                return op;
-        }
+                FirstOf(OR, AND, EQ, NOT_EQ, GE, GT, LT, LE, LIKE, NOT_LIKE, IN).label("operator"),
+                push(match().trim() + " "));
     }
 
     Rule rootQuery() {
@@ -147,7 +138,22 @@ public class SimpleGrammar extends BaseParser<String> {
                 selector(),
                 operator(),
                 value(),
-                push(String.format("%3$s%2$s%1$s", pop(), pop(), pop())));
+                push(convertOperator(pop(), pop(), pop())));
+    }
+
+    static String convertOperator(String selector, String operator, String value) {
+        String resultString;
+        switch (operator.trim()) {
+            case "not_like":
+                resultString = "not (%3$s matches %1$s)";
+                break;
+            case "like":
+                resultString = "%3$s matches %1$s";
+                break;
+            default:
+                resultString = "%3$s%2$s%1$s";
+        }
+        return String.format(resultString, selector, operator, value);
     }
 
     Rule selector() {

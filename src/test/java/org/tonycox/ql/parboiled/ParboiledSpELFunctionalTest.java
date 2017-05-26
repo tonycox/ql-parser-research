@@ -39,7 +39,7 @@ public class ParboiledSpELFunctionalTest {
         AssertJUnit.assertEquals(userName, actual.get(0).getName());
     }
 
-    @Test(enabled = false)
+    @Test
     public void evaluateParsedNotLikeQuery() {
         String query = "name not_like 'Ned Fl.*'";
         String parsedQuery = grammar.parseQuery(query).getValue();
