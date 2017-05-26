@@ -1,6 +1,7 @@
 package org.tonycox.ql.parboiled;
 
 import org.parboiled.Parboiled;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.testng.AssertJUnit;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -18,17 +19,19 @@ import java.util.stream.Stream;
 public class ParboiledSpELFunctionalTest {
 
     private SimpleGrammar grammar;
+    private SpelExpressionParser spelParser;
 
     @BeforeMethod
     public void setUp() {
         grammar = Parboiled.createParser(SimpleGrammar.class);
+        spelParser = new SpelExpressionParser();
     }
 
     @Test
     public void evaluateParsedLikeQuery() {
         String query = "(name like 'Ned Fl.*') and (phone eq 'stupid')";
         String parsedQuery = grammar.parseQuery(query).getValue();
-        SpELPredicate<User> predicate = new SpELPredicate<>(parsedQuery);
+        SpELPredicate<User> predicate = new SpELPredicate<>(spelParser.parseRaw(parsedQuery));
         String userName = "Ned Flanders";
         List<User> actual = Stream
                 .of(new User().setName(userName).setPhone("stupid"),
@@ -43,7 +46,7 @@ public class ParboiledSpELFunctionalTest {
     public void evaluateParsedNotLikeQuery() {
         String query = "name not_like 'Ned Fl.*'";
         String parsedQuery = grammar.parseQuery(query).getValue();
-        SpELPredicate<User> predicate = new SpELPredicate<>(parsedQuery);
+        SpELPredicate<User> predicate = new SpELPredicate<>(spelParser.parseRaw(parsedQuery));
         String userName = "Homer Simpson";
         List<User> actual = Stream
                 .of(new User().setName("Ned Flanders").setPhone("stupid"),

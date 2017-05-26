@@ -1,17 +1,18 @@
 package org.tonycox.ql.parboiled;
 
-import org.parboiled.Parboiled;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.core.convert.support.DefaultConversionService;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 import org.tonycox.ql.User;
-import org.tonycox.ql.spel.SpELPredicate;
 
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -21,14 +22,11 @@ import java.util.stream.Stream;
  */
 @RestController
 @SpringBootApplication
+@ComponentScan(basePackageClasses = {Config.class})
 public class ParboiledApp {
 
-    private SimpleGrammar grammar = Parboiled.createParser(SimpleGrammar.class);
-
-    @RequestMapping(method = RequestMethod.GET, value = "/users")
-    public List<User> getUsersByQuery(@RequestParam("query") String query) {
-        String parsedQuery = grammar.parseQuery(query).getValue();
-        SpELPredicate<User> predicate = new SpELPredicate<>(parsedQuery);
+    @GetMapping(value = "/users")
+    public List<User> getUsersByQuery(@RequestParam("query") Predicate<User> predicate) {
         return Stream
                 .of(new User().setName("Ned Flanders").setPhone("stupid"),
                         new User().setName("Homer Simpson").setPhone("not stupid"))
@@ -38,8 +36,7 @@ public class ParboiledApp {
 
     public static void main(String[] args) {
         SpringApplication.run(ParboiledApp.class, args);
-        String query = "(name like 'Ned Fl.*') and (phone eq 'stupid')";
-
+        String query = "(name not_like 'Ned Fl.*') and (phone ne 'stupid')";
         RestTemplate rest = new RestTemplate();
         List answer = rest
                 .getForObject("http://localhost:8080/users?query=" + query, List.class);
